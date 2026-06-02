@@ -32,6 +32,30 @@ class JumpTimingTest {
     }
 
     @Test
+    fun `wechat timing applies minimum after vertical calibration`() {
+        val duration = JumpTiming.calculatePressTimeMs(
+            distance = 1f,
+            deltaPieceY = 32,
+            pressCoefficient = 1.392f,
+            headDiameter = 70f
+        )
+
+        assertEquals(200L, duration)
+    }
+
+    @Test
+    fun `wechat timing caps extreme durations`() {
+        val duration = JumpTiming.calculatePressTimeMs(
+            distance = 20000f,
+            deltaPieceY = 800,
+            pressCoefficient = 3.0f,
+            headDiameter = 40f
+        )
+
+        assertEquals(5000L, duration)
+    }
+
+    @Test
     fun `head diameter follows original pc adb density calibration`() {
         val withPhysicalDensity640 = JumpTiming.calculatePressTimeMs(
             distance = 620f,

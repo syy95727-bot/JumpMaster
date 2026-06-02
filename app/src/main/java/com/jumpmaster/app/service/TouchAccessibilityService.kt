@@ -28,21 +28,34 @@ class TouchAccessibilityService : AccessibilityService() {
 
         fun getActivePackageName(): String? = activePackageName
 
+        fun longPress(
+            x: Int,
+            y: Int,
+            durationMs: Long,
+            onComplete: ((Boolean) -> Unit)? = null
+        ) {
+            longPress(x, y, x, y, durationMs, onComplete)
+        }
+
         /**
-         * Perform a long press at the given screen coordinates.
-         * @param x X coordinate
-         * @param y Y coordinate
-         * @param durationMs Duration of the press in milliseconds
-         * @param onComplete Called when the gesture completes (or fails)
+         * Perform a swipe-style long press matching
+         * `adb shell input swipe x1 y1 x2 y2 duration`.
          */
-        fun longPress(x: Int, y: Int, durationMs: Long, onComplete: ((Boolean) -> Unit)? = null) {
+        fun longPress(
+            x: Int,
+            y: Int,
+            endX: Int,
+            endY: Int,
+            durationMs: Long,
+            onComplete: ((Boolean) -> Unit)? = null
+        ) {
             val service = instance
             if (service == null) {
                 Log.w(TAG, "Service not running, cannot perform gesture")
                 onComplete?.invoke(false)
                 return
             }
-            service.performLongPress(x, y, durationMs, onComplete)
+            service.performLongPress(x, y, endX, endY, durationMs, onComplete)
         }
 
         fun captureScreenshot(onComplete: (Bitmap?) -> Unit) {
@@ -76,9 +89,17 @@ class TouchAccessibilityService : AccessibilityService() {
      * Perform a long press gesture using the GestureDescription API.
      * This simulates the ADB "input swipe x y x y duration" from the Python tool.
      */
-    private fun performLongPress(x: Int, y: Int, durationMs: Long, onComplete: ((Boolean) -> Unit)?) {
+    private fun performLongPress(
+        x: Int,
+        y: Int,
+        endX: Int,
+        endY: Int,
+        durationMs: Long,
+        onComplete: ((Boolean) -> Unit)?
+    ) {
         val path = Path().apply {
             moveTo(x.toFloat(), y.toFloat())
+            lineTo(endX.toFloat(), endY.toFloat())
         }
 
         val strokeDescription = GestureDescription.StrokeDescription(
@@ -91,12 +112,12 @@ class TouchAccessibilityService : AccessibilityService() {
 
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
-                Log.d(TAG, "Gesture completed: long press ($x, $y) for ${durationMs}ms")
+                Log.d(TAG, "Gesture completed: swipe press ($x, $y)->($endX, $endY) for ${durationMs}ms")
                 handler.post { onComplete?.invoke(true) }
             }
 
             override fun onCancelled(gestureDescription: GestureDescription?) {
-                Log.w(TAG, "Gesture cancelled: long press ($x, $y)")
+                Log.w(TAG, "Gesture cancelled: swipe press ($x, $y)->($endX, $endY)")
                 handler.post { onComplete?.invoke(false) }
             }
         }, handler)

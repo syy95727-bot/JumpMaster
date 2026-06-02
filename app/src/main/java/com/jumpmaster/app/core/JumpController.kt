@@ -214,10 +214,20 @@ class JumpController(private val context: Context) {
         addLog("距离 ${result.distance.toInt()}px · ${result.pressTimeMs}ms")
         vibrate()
 
-        val pressX = config.startX.coerceIn(1, config.screenWidth - 1)
-        val pressY = config.startY.coerceIn(1, config.screenHeight - 1)
+        val press = JumpTouch.createOriginalSwipePosition(screenshot.width, screenshot.height)
+        Log.i(
+            TAG,
+            "Local long press from (${press.startX}, ${press.startY}) " +
+                    "to (${press.endX}, ${press.endY}) for ${result.pressTimeMs}ms"
+        )
 
-        TouchAccessibilityService.longPress(pressX, pressY, result.pressTimeMs) { success ->
+        TouchAccessibilityService.longPress(
+            x = press.startX,
+            y = press.startY,
+            endX = press.endX,
+            endY = press.endY,
+            durationMs = result.pressTimeMs
+        ) { success ->
             if (!running) return@longPress
             if (success) {
                 jumpCount++
@@ -385,17 +395,17 @@ class JumpController(private val context: Context) {
             if (!running || paused) return@launch
 
             // Step 3: Touch via ADB (input swipe)
-            val press = createOriginalSwipePosition(screenshot.width, screenshot.height)
+            val press = JumpTouch.createOriginalSwipePosition(screenshot.width, screenshot.height)
             Log.i(
                 TAG,
-                "ADB long press from (${press.first.first}, ${press.first.second}) " +
-                        "to (${press.second.first}, ${press.second.second}) for ${result.pressTimeMs}ms"
+                "ADB long press from (${press.startX}, ${press.startY}) " +
+                        "to (${press.endX}, ${press.endY}) for ${result.pressTimeMs}ms"
             )
             val success = adbService.performLongPress(
-                x = press.first.first,
-                y = press.first.second,
-                endX = press.second.first,
-                endY = press.second.second,
+                x = press.startX,
+                y = press.startY,
+                endX = press.endX,
+                endY = press.endY,
                 durationMs = result.pressTimeMs
             )
 
@@ -535,16 +545,6 @@ class JumpController(private val context: Context) {
                      else FloatingWindowService.ACTION_TEMP_HIDE
         }
         try { context.startService(intent) } catch (_: Exception) {}
-    }
-
-    private fun createOriginalSwipePosition(width: Int, height: Int): Pair<Pair<Int, Int>, Pair<Int, Int>> {
-        val left = width / 2
-        val top = (1584f * (height / 1920f)).toInt()
-        val x1 = Random.nextInt(left - 200, left + 201).coerceIn(1, width - 1)
-        val y1 = Random.nextInt(top - 200, top + 201).coerceIn(1, height - 1)
-        val x2 = Random.nextInt(left - 200, left + 201).coerceIn(1, width - 1)
-        val y2 = Random.nextInt(top - 200, top + 201).coerceIn(1, height - 1)
-        return (x1 to y1) to (x2 to y2)
     }
 
     private fun resetRestPlan() {
