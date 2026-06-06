@@ -1,0 +1,68 @@
+name: Android Debug CI — Diagnostics
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  debug-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Run diagnostics and build
+        run: |
+          echo "=== JAVA VERSION ===" > diag.txt
+          java -version 2>&1 | tee -a diag.txt || true
+
+          echo "\n=== GRADLE WRAPPER VERSION ===" | tee -a diag.txt
+          ./gradlew -v 2>&1 | tee -a diag.txt || true
+
+          echo "\n=== LIST PROJECT FILES (<=3 levels) ===" >> diag.txt
+          find . -maxdepth 3 -type f -print | sed -e 's/^/FILE: /' >> diag.txt || true
+
+          echo "\n=== SETTINGS.GRADLE(S) CONTENT (first 200 lines) ===" >> diag.txt
+          if [ -f settings.gradle ]; then sed -n '1,200p' settings.gradle >> diag.txt; fi
+          if [ -f settings.gradle.kts ]; then sed -n '1,200p' settings.gradle.kts >> diag.txt; fi
+
+          echo "\n=== Detecting Android app module ===" >> diag.txt
+          file=$(grep -RIl "com.android.application" --exclude-dir=.github --exclude-dir=.gradle --exclude-dir=gradle || true)
+          if [ -z "$file" ]; then
+            file=$(find . -maxdepth 2 -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) | head -n 1 || true)
+          fi
+          if [ -z "$file" ]; then
+            module="app"
+          else
+            dir=$(dirname "$file")
+            module=${dir#./}
+            if [ -z "$module" ] || [ "$module" = "." ]; then
+              module="app"
+            fi
+          fi
+          echo "Detected module: $module" | tee -a diag.txt
+
+          echo "\n=== Attempting assembleDebug for module: $module ===" | tee -a diag.txt
+          ./gradlew :${module}:assembleDebug --no-daemon 2>&1 | tee build.log || true
+          echo "Gradle exit code: ${PIPESTATUS[0]}" >> build.log || true
+          echo "\n=== build.log content ===" >> diag.txt
+          cat build.log >> diag.txt || true
+
+      - name: Upload diagnostics and APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-diagnostics
+          path: |
+            diag.txt
+            build.log
+            **/build/outputs/**/*.apk
